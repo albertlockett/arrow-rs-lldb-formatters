@@ -5,7 +5,48 @@ def arrow_array_summary(valobj, internal_dict):
     
     try:
         if type_name.startswith("alloc::sync::Arc"):
-            return "Arc<dyn Array>"
+            try:
+                raw_val = valobj.GetNonSyntheticValue()
+                ptr_val = raw_val.GetChildMemberWithName("ptr")
+                print(f"DEBUG ptr_val valid = {ptr_val.IsValid()}")
+
+                pointer_val = ptr_val.GetChildMemberWithName("pointer")
+                print(f"DEBUG pointer valid = {pointer_val.IsValid()}")
+
+                vtable_val = pointer_val.GetChildMemberWithName("vtable")
+                print(f"DEBUG vtable_val valid = {vtable_val.IsValid()}")
+
+                vtable_pointer = vtable_val.GetValueAsUnsigned()
+                print(f"DEBUG: Child[0] addr = 0x{vtable_pointer:x}")
+
+                target = valobj.GetTarget()
+                process = target.GetProcess()
+                error = lldb.SBError()
+                first_fn_ptr = process.ReadPointerFromMemory(vtable_pointer, error)
+                
+                if error.Success():
+                    print("DEBUG symbol no error reading memory from vtable")
+                    sb_addr = target.ResolveLoadAddress(first_fn_ptr)
+                    symbol = sb_addr.GetSymbol()
+                    
+                    if symbol and symbol.IsValid():
+                        print("DEBUG symbol valid")
+                        symbol_name = symbol.GetName()
+                        print(f"DEBUG symbol name {symbol_name}")
+                        # Symbol typically: core::ptr::drop_in_place<arrow_array::array::primitive_array::PrimitiveArray<...>>
+                        # Use regex to extract the type inside the brackets
+                        import re
+                        match = re.search(r'drop_in_place<(.*)>', symbol_name)
+                        if match:
+                            print(f"DEBUG match 1 {match.group(1)}")
+                            return f"Arc<{match.group(1)} as Array>"
+                
+                return "Arc<dyn Array>(debug)"
+            except Exception as e:
+                print(f"DEBUG arc_dyn_array_summary error: {e}")
+                import traceback
+                traceback.print_exc()
+                return f"Arc<dyn Array>(error: {e})"
         
         if "PrimitiveArray" in type_name:
             import re
@@ -117,45 +158,67 @@ class PrimitiveArraySyntheticProvider:
     def update(self):
         """Extract buffer pointer, length, and element type"""
         try:
+            print(f"DEBUG: update() called for {self.valobj.GetTypeName()}")
+            
             # Get the element type from PrimitiveArray<T>
             type_name = self.valobj.GetTypeName()
             
-            # Map Arrow types to LLDB types
+            # Map Arrow types to LLDB types and sizes
             type_map = {
-                'UInt8Type': 'uint8_t',
-                'UInt16Type': 'uint16_t',
-                'UInt32Type': 'uint32_t',
-                'UInt64Type': 'uint64_t',
-                'Int8Type': 'int8_t',
-                'Int16Type': 'int16_t',
-                'Int32Type': 'int32_t',
-                'Int64Type': 'int64_t',
-                'Float32Type': 'float',
-                'Float64Type': 'double',
+                'UInt8Type': ('unsigned char', 1),
+                'UInt16Type': ('unsigned short', 2),
+                'UInt32Type': ('unsigned int', 4),
+                'UInt64Type': ('unsigned long long', 8),
+                'Int8Type': ('char', 1),
+                'Int16Type': ('short', 2),
+                'Int32Type': ('int', 4),
+                'Int64Type': ('long long', 8),
+                'Float32Type': ('float', 4),
+                'Float64Type': ('double', 8),
             }
             
             import re
             match = re.search(r'PrimitiveArray<.*::(\w+)>', type_name)
             if match:
                 arrow_type = match.group(1)
-                lldb_type_name = type_map.get(arrow_type, 'uint8_t')
+                lldb_type_name, self.elem_size = type_map.get(arrow_type, ('unsigned char', 1))
+                print(f"DEBUG: Detected type {arrow_type} -> {lldb_type_name}, size {self.elem_size}")
             else:
-                lldb_type_name = 'uint8_t'
+                lldb_type_name = 'unsigned char'
+                self.elem_size = 1
+                print(f"DEBUG: No type match, using default")
             
             # Get the type object from the target
             target = self.valobj.GetTarget()
             self.elem_type = target.FindFirstType(lldb_type_name)
-            self.elem_size = self.elem_type.GetByteSize()
+            
+            if not self.elem_type or not self.elem_type.IsValid():
+                print(f"DEBUG: Type {lldb_type_name} not found!")
+                self.elem_type = target.FindFirstType('unsigned char')
+            else:
+                print(f"DEBUG: Found type {lldb_type_name}")
             
             # Navigate to the buffer pointer and length
             values = self.valobj.GetChildMemberWithName("values")
-            buffer = values.GetChildMemberWithName("buffer")
+            print(f"DEBUG: values valid: {values.IsValid()}")
             
-            self.ptr = buffer.GetChildMemberWithName("ptr").GetValueAsUnsigned(0)
-            self.length = buffer.GetChildMemberWithName("length").GetValueAsUnsigned(0)
+            buffer = values.GetChildMemberWithName("buffer")
+            print(f"DEBUG: buffer valid: {buffer.IsValid()}")
+            
+            ptr_obj = buffer.GetChildMemberWithName("ptr")
+            len_obj = buffer.GetChildMemberWithName("length")
+            
+            print(f"DEBUG: ptr valid: {ptr_obj.IsValid()}, len valid: {len_obj.IsValid()}")
+            
+            self.ptr = ptr_obj.GetValueAsUnsigned(0)
+            self.length = len_obj.GetValueAsUnsigned(0) // self.elem_size
+            
+            print(f"DEBUG: ptr=0x{self.ptr:x}, length={self.length}, elem_size={self.elem_size}")
             
         except Exception as e:
             print(f"PrimitiveArray synthetic update error: {e}")
+            import traceback
+            traceback.print_exc()
             self.ptr = 0
             self.length = 0
             self.elem_size = 1
