@@ -79,9 +79,3 @@ class ScalarBufferSyntheticChildProvider:
         except Exception as e:
             print(f"ERROR error happened {e}")
             pass
-
-#    def get_value(self) -> lldb.SBValue | None:
-#       """
-#       This call can return an SBValue to be presented as the value of the
-#       synthetic value under consideration.[4]
-#       """"
