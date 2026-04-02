@@ -37,7 +37,7 @@ def get_array_concrete_type_from_vtable(valobj):
 def array_ref_summary(valobj, internal_dict):
     concrete_type = get_array_concrete_type_from_vtable(valobj)
     print(f"DEBUG concrete array ref type = {concrete_type}")
-    return "IT IS AN ARRAY REF"
+    return f"Arc<{concrete_type} as dyn Array>"
 
 class ArrayRefSyntheticChildProvider:
     def __init__(self, valobj: lldb.SBValue, internal_dict):
@@ -87,7 +87,7 @@ class ArrayRefSyntheticChildProvider:
             # print(f"DEBUG self.ptr = {self.ptr:x}")
 
             arc_inner_data = inner_pointer.GetChildMemberWithName("data")
-            print(f"inner arg data = {arc_inner_data} is valid = {arc_inner_data.IsValid()}")
+            # print(f"inner arg data = {arc_inner_data} is valid = {arc_inner_data.IsValid()}")
             self.ptr = arc_inner_data.GetAddress().GetLoadAddress(target)
             
         except Exception as e:
