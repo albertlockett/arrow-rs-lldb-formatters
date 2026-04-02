@@ -5,12 +5,10 @@ def scalar_buffer_array_summary(valueobj, internal_dict):
 
 class ScalarBufferSyntheticChildProvider:
     def __init__(self, valobj: lldb.SBValue, internal_dict):
-        print("synthetic child called")
         self.valobj = valobj
         self.update()
 
     def num_children(self, max_children: int) -> int:
-        print(f"max children {max_children}")
         return min(self.length, max_children)
 
     def get_child_index(self, name: str) -> int:
