@@ -42,10 +42,10 @@ class BooleanBufferSyntheticChildProvider:
                 # Create an SBValue for the boolean result
                 return self.valobj.CreateValueFromExpression(child_name, f"({type_str}) {child_value}")
             else:
-                print(f"Failed to read memory at address {hex(addr)}: {error.GetCString()}")
+                print(f"ERROR BooleanBufferSyntheticChildProvider Failed to read memory at address {hex(addr)}: {error.GetCString()}")
 
         except Exception as e:
-            print(f"exception happen making child {e}")
+            print(f"ERROR: BooleanBufferSyntheticChildProvider exception happen making child {e}")
             return None
 
     def update(self) -> bool:
@@ -53,20 +53,20 @@ class BooleanBufferSyntheticChildProvider:
             
             buffer = self.valobj.GetChildMemberWithName("buffer")
             if not buffer.IsValid():
-                print("ERROR NullBufferSyntheticChildProvider::update buffer not valid")
+                print("ERROR BooleanBufferSyntheticChildProvider::update buffer not valid")
 
             ptr_obj = buffer.GetChildMemberWithName("ptr")
             if not ptr_obj.IsValid():
-                print("ERROR ptr not valid")
+                print("ERROR BooleanBufferSyntheticChildProvider ptr not valid")
             self.ptr = ptr_obj.GetValueAsUnsigned(0)
 
             len_obj = self.valobj.GetChildMemberWithName("bit_len")
             if not len_obj.IsValid():
-                print("ERROR len not valid")
+                print("ERROR BooleanBufferSyntheticChildProvider len not valid")
             self.length = len_obj.GetValueAsUnsigned(0)
 
         except Exception as e:
-            print(f"ERROR NullBufferSyntheticChildProvider::update error happened {e}")
+            print(f"ERROR BooleanBufferSyntheticChildProvider::update error happened {e}")
             pass
 
     def has_children(self) -> bool:
